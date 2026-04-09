@@ -6,6 +6,7 @@ from sklearn.preprocessing import MinMaxScaler
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from pandas import to_datetime
 
 
 def create_dataset(dataset, look_back=1):
@@ -36,12 +37,29 @@ class StackedLSTM(nn.Module):
 
 
 # fix random seed for reproducibility
-np.random.seed(7)
-torch.manual_seed(7)
+np.random.seed(67)
+torch.manual_seed(67)
 
 # load the dataset
-dataframe = read_csv("airline-passengers.csv", usecols=[1], engine="python")
-dataset = dataframe.values.astype("float32")
+# we pick participant one for example
+dataframe = read_csv("pmdata/p01/googledocs/reporting.csv", engine="python")
+
+# Convert date to datetime with mm/dd/yyyy format
+dataframe['date'] = to_datetime(dataframe['date'], format='%d/%m/%Y')
+
+# Sort by date
+dataframe = dataframe.sort_values('date').reset_index(drop=True)
+
+# Normalize date: set lowest date to 0 (as number of days from minimum)
+dataframe['date'] = (dataframe['date'] - dataframe['date'].min()).dt.days
+
+# Convert weight to float32
+dataframe['weight'] = dataframe['weight'].astype('float32')
+
+# Skip rows with missing weight values
+dataframe = dataframe.dropna(subset=['weight']).reset_index(drop=True)
+
+dataset = dataframe['weight'].values.astype("float32").reshape(-1, 1)
 
 # normalize the dataset
 scaler = MinMaxScaler(feature_range=(0, 1))
@@ -152,9 +170,13 @@ test_predict_plot[
 ] = test_predict
 
 # plot baseline and predictions
-plt.plot(scaler.inverse_transform(dataset))
-plt.plot(train_predict_plot)
-plt.plot(test_predict_plot)
+plt.plot(scaler.inverse_transform(dataset), label='Actual Data')
+plt.plot(train_predict_plot, label='Train Predictions')
+plt.plot(test_predict_plot, label='Test Predictions')
+plt.title('Weight Predictions vs Actual Data')
+plt.xlabel('Days from Start')
+plt.ylabel('Weight')
+plt.legend()
 plt.savefig("predictions.png")
 plt.close()
 
